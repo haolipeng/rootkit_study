@@ -1,0 +1,1 @@
+cmd_/home/work/rootkit_study/ftrace_hook/rootkit.ko := ld -r -m elf_x86_64  -z max-page-size=0x200000 -z noexecstack   --build-id  -T ./scripts/module-common.lds -o /home/work/rootkit_study/ftrace_hook/rootkit.ko /home/work/rootkit_study/ftrace_hook/rootkit.o /home/work/rootkit_study/ftrace_hook/rootkit.mod.o;  true
