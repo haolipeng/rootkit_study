@@ -1,1 +1,0 @@
-cmd_/home/work/rootkit_study/tracepoint/tracepoint-sample.ko := ld -r -m elf_x86_64 -T ./scripts/module-common.lds --build-id  -o /home/work/rootkit_study/tracepoint/tracepoint-sample.ko /home/work/rootkit_study/tracepoint/tracepoint-sample.o /home/work/rootkit_study/tracepoint/tracepoint-sample.mod.o
