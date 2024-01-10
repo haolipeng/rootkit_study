@@ -1,0 +1,1 @@
+cmd_/home/work/rootkit_study/a3rootkit/moduleHide/a3rootkit.mod := printf '%s\n'   a3rootkit.o | awk '!x[$$0]++ { print("/home/work/rootkit_study/a3rootkit/moduleHide/"$$0) }' > /home/work/rootkit_study/a3rootkit/moduleHide/a3rootkit.mod

