@@ -1,1 +1,0 @@
-cmd_/home/work/rootkit_study/a3rootkit/moduleHide/modules.order := {   echo /home/work/rootkit_study/a3rootkit/moduleHide/a3rootkit.o; :; } > /home/work/rootkit_study/a3rootkit/moduleHide/modules.order

@@ -1,1 +1,0 @@
-cmd_/home/work/rootkit_study/a3rootkit/moduleHide/Module.symvers :=  scripts/mod/modpost -m -a     -o /home/work/rootkit_study/a3rootkit/moduleHide/Module.symvers -T /home/work/rootkit_study/a3rootkit/moduleHide/modules.order -i Module.symvers -e 
