@@ -1,1 +1,0 @@
-cmd_/home/work/rootkit_study/a3rootkit/find_syscall_table/Module.symvers :=  scripts/mod/modpost -m -a     -o /home/work/rootkit_study/a3rootkit/find_syscall_table/Module.symvers -T /home/work/rootkit_study/a3rootkit/find_syscall_table/modules.order -i Module.symvers -e 

