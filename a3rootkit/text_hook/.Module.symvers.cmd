@@ -1,0 +1,1 @@
+cmd_/home/work/rootkit_study/a3rootkit/text_hook/Module.symvers :=  scripts/mod/modpost -m -a     -o /home/work/rootkit_study/a3rootkit/text_hook/Module.symvers -T /home/work/rootkit_study/a3rootkit/text_hook/modules.order -i Module.symvers -e 

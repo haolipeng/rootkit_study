@@ -1,0 +1,1 @@
+cmd_/home/work/rootkit_study/a3rootkit/text_hook/a3rootkit.mod := printf '%s\n'   a3rootkit.o | awk '!x[$$0]++ { print("/home/work/rootkit_study/a3rootkit/text_hook/"$$0) }' > /home/work/rootkit_study/a3rootkit/text_hook/a3rootkit.mod

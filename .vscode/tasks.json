@@ -1,0 +1,98 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "clean",
+			"command": "/usr/bin/make",
+			"args": [
+				"clean"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [
+				"$gcc"
+			]
+		},
+		{
+			"type": "shell",
+			"label": "build (release)",
+			"command": "/usr/bin/make",
+			"args": [
+				"release"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [
+				"$gcc"
+			]
+		},
+		{
+			"type": "shell",
+			"label": "build (debug)",
+			"command": "/usr/bin/make",
+			"args": [
+				"debug"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"type": "shell",
+			"label": "debug",
+			"command": "/bin/bash",
+			"args": [
+				"-c",
+				"sudo ./debug.sh"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [
+				{
+					"pattern": [
+						{
+							"regexp": ".",
+							"file": 1,
+							"location": 2,
+							"message": 3
+						}
+					],
+					"background": {
+						"activeOnStart": true,
+						"beginsPattern": ".",
+						"endsPattern": "."
+					}
+				}
+			],
+			"dependsOn": [
+				"build (debug)"
+			],
+			
+		},
+		{
+			"type": "shell",
+			"label": "kill QEMU",
+			"isBackground": true,
+			"command": "/bin/bash",
+			"args": [
+				"-c",
+				"sudo pkill qemu && pkill gdb && pkill debug.sh",
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": []
+		}
+	]
+}

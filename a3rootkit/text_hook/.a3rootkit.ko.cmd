@@ -1,0 +1,1 @@
+cmd_/home/work/rootkit_study/a3rootkit/text_hook/a3rootkit.ko := ld -r -m elf_x86_64 -z noexecstack --build-id=sha1  -T scripts/module.lds -o /home/work/rootkit_study/a3rootkit/text_hook/a3rootkit.ko /home/work/rootkit_study/a3rootkit/text_hook/a3rootkit.o /home/work/rootkit_study/a3rootkit/text_hook/a3rootkit.mod.o;  true

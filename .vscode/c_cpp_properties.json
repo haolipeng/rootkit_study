@@ -1,0 +1,32 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "/usr/src/linux-source-5.15.0/arch/x86/include",
+                // "/usr/src/linux-source-5.15.0/arch/x86/include/generated",
+                "/usr/src/linux-source-5.15.0/arch/x86/include/uapi",
+                // "/usr/src/linux-source-5.15.0/arch/x86/include/generated/uapi",
+                "/usr/src/linux-source-5.15.0/include",
+                "/usr/src/linux-source-5.15.0/include/uapi",
+                // "/usr/src/linux-source-5.15.0/include/generated/uapi",
+                // "/usr/lib/gcc/x86_64-linux-gnu/11/include"
+            ],
+            "compilerArgs": [
+                "-nostdinc",
+                "-include", "/usr/src/linux-source-5.15.0/include/linux/kconfig.h",
+                "-include", "/usr/src/linux-source-5.15.0/include/linux/compiler_types.h",
+                "-Wno-declaration-after-statement"
+            ],
+            "defines": [
+                "__KERNEL__",
+                "MODULE"
+            ],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "gcc-x64"
+        }
+    ],
+    "version": 4
+}

