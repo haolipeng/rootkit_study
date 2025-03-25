@@ -395,7 +395,7 @@ diamorphine_init(void)
 	init_begin = (unsigned long)kallsyms_lookup_name("__init_begin");
 #endif
 
-	module_hide();
+	//module_hide();
 	tidy();
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 16, 0)
