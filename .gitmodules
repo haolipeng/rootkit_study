@@ -1,0 +1,3 @@
+[submodule "Nornir-Rootkit"]
+	path = Nornir-Rootkit
+	url = https://github.com/arttnba3/Nornir-Rootkit.git
